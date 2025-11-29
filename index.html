@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>IPTV Playlist Viewer</title>
   <style>
     :root { color-scheme: dark; font-family: "Segoe UI", Arial, sans-serif; background:#0f1117; color:#e6e9ef; }
@@ -9,8 +10,8 @@
     header { padding:1.5rem; background:#1b1f2b; border-bottom:1px solid #2a3145; }
     main { flex:1; display:flex; gap:1rem; padding:1rem; }
     .panel { background:#151926; border:1px solid #252b3f; border-radius:8px; padding:1rem; display:flex; flex-direction:column; }
-    #channelPanel { width:360px; }
-    #playerPanel { flex:1; }
+    #channelPanel { width:360px; flex-shrink:0; }
+    #playerPanel { flex:1; min-width:0; }
     label.file-upload { display:inline-flex; align-items:center; gap:.5rem; border:1px dashed #3d4561; border-radius:6px; padding:.5rem .75rem; cursor:pointer; }
     label.file-upload input { display:none; }
     .controls { display:flex; flex-wrap:wrap; gap:.75rem; align-items:center; margin-bottom:1rem; }
@@ -27,6 +28,23 @@
     .info { margin-top:1rem; line-height:1.6; }
     button.clear { background:none; border:1px solid #424867; color:#e6e9ef; border-radius:4px; padding:.45rem .75rem; cursor:pointer; }
     button.clear:hover { border-color:#6c7394; }
+
+    @media (max-width: 1024px) {
+      main { flex-direction:column; }
+      #channelPanel, #playerPanel { width:100%; }
+      ul.channels { max-height:40vh; }
+      video { max-height:55vh; }
+    }
+
+    @media (max-width: 640px) {
+      header { text-align:center; padding:1.25rem 1rem; }
+      .controls { flex-direction:column; align-items:stretch; }
+      label.file-upload, button.clear { width:100%; justify-content:center; }
+      .search { width:100%; min-width:0; }
+      #channelPanel { order:2; }
+      #playerPanel { order:1; }
+      video { min-height:240px; }
+    }
   </style>
 </head>
 <body>
