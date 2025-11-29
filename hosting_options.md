@@ -1,5 +1,6 @@
 # Hosting Options for IPTV Playlist Viewer
 
+
 ## GitHub Pages
 - Supports static sites (HTML/CSS/JS) for free.
 - Enable through Repository Settings > Pages, target the `master` branch root.
@@ -14,7 +15,7 @@
 ## Vercel
 - Designed for static and serverless apps; static deployment is as simple as linking the repo.
 - Free tier includes SSL, CDN edge network, and preview deployments per pull request.
-- Ideal if you later add tooling/build steps, though it’s equally fine for pure static content.
+- Ideal if you later add tooling/build steps, though itï¿½s equally fine for pure static content.
 
 ## Cloudflare Pages
 - GitHub/GitLab integration, zero-cost plan with generous bandwidth.
