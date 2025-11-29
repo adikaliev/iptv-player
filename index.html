@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>IPTV Playlist Viewer</title>
+  <style>
+    :root { color-scheme: dark; font-family: "Segoe UI", Arial, sans-serif; background:#0f1117; color:#e6e9ef; }
+    body { margin:0; min-height:100vh; display:flex; flex-direction:column; }
+    header { padding:1.5rem; background:#1b1f2b; border-bottom:1px solid #2a3145; }
+    main { flex:1; display:flex; gap:1rem; padding:1rem; }
+    .panel { background:#151926; border:1px solid #252b3f; border-radius:8px; padding:1rem; display:flex; flex-direction:column; }
+    #channelPanel { width:360px; }
+    #playerPanel { flex:1; }
+    label.file-upload { display:inline-flex; align-items:center; gap:.5rem; border:1px dashed #3d4561; border-radius:6px; padding:.5rem .75rem; cursor:pointer; }
+    label.file-upload input { display:none; }
+    .controls { display:flex; flex-wrap:wrap; gap:.75rem; align-items:center; margin-bottom:1rem; }
+    .search { flex:1; min-width:180px; }
+    .search input { width:100%; padding:.5rem .75rem; border-radius:4px; border:1px solid #2f364d; background:#0f1420; color:#e6e9ef; }
+    ul.channels { list-style:none; padding:0; margin:0; overflow:auto; max-height:60vh; }
+    li.channel { display:flex; gap:.75rem; padding:.5rem; border-radius:6px; cursor:pointer; border:1px solid transparent; }
+    li.channel:hover { background:#1e2435; }
+    li.channel.selected { background:#212a3f; border-color:#4c6ef5; }
+    .logo { width:48px; height:48px; border-radius:4px; background:#0d111a center/contain no-repeat; flex-shrink:0; }
+    .meta { display:flex; flex-direction:column; }
+    .meta small { color:#9ba3c4; }
+    video { width:100%; max-height:70vh; background:#000; border-radius:8px; border:1px solid #2a3145; }
+    .info { margin-top:1rem; line-height:1.6; }
+    button.clear { background:none; border:1px solid #424867; color:#e6e9ef; border-radius:4px; padding:.45rem .75rem; cursor:pointer; }
+    button.clear:hover { border-color:#6c7394; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>IPTV Playlist Viewer</h1>
+    <p>Upload any M3U playlist to browse and play its streams locally.</p>
+  </header>
+
+  <main>
+    <section class="panel" id="channelPanel">
+      <div class="controls">
+        <label class="file-upload">
+          <span>Choose playlist</span>
+          <input type="file" id="playlistFile" accept=".m3u,.m3u8">
+        </label>
+        <div class="search">
+          <input type="search" id="searchInput" placeholder="Filter by channel, group, or ID">
+        </div>
+        <button class="clear" id="clearFilters">Clear</button>
+      </div>
+      <div id="stats">No playlist loaded</div>
+      <ul class="channels" id="channelList">
+        <li style="color:#9ba3c4;">Upload an M3U file to see channels.</li>
+      </ul>
+    </section>
+
+    <section class="panel" id="playerPanel">
+      <video id="player" controls playsinline poster="" preload="metadata"></video>
+      <div class="info" id="channelInfo">
+        <strong>Channel:</strong> None selected<br>
+        <strong>Group:</strong> –<br>
+        <strong>ID:</strong> –
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
+  <script>
+    const fileInput = document.getElementById('playlistFile');
+    const listEl = document.getElementById('channelList');
+    const statsEl = document.getElementById('stats');
+    const searchInput = document.getElementById('searchInput');
+    const clearBtn = document.getElementById('clearFilters');
+    const player = document.getElementById('player');
+    const infoEl = document.getElementById('channelInfo');
+
+    const state = { channels: [], filtered: [], selected: null, hls: null };
+
+    fileInput.addEventListener('change', handleFileSelection);
+    searchInput.addEventListener('input', () => applyFilter(searchInput.value));
+    clearBtn.addEventListener('click', () => { searchInput.value = ''; applyFilter(''); });
+    player.addEventListener('error', () => {
+      infoEl.insertAdjacentHTML('beforeend', '<br><strong>Status:</strong> Video element reported an error.');
+    });
+
+    function handleFileSelection(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        state.channels = parseM3U(reader.result);
+        state.filtered = state.channels;
+        renderList(state.filtered);
+        statsEl.textContent = `${file.name} · ${state.channels.length} channels`;
+        if (!state.channels.length) {
+          infoEl.innerHTML = '<strong>Channel:</strong> None found';
+          stopStream();
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function parseM3U(text) {
+      const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+      const entries = [];
+      for (let i = 0; i < lines.length; i++) {
+        if (!lines[i].startsWith('#EXTINF')) continue;
+        const meta = lines[i];
+        const url = lines[i + 1] || '';
+        const name = meta.substring(meta.lastIndexOf(',') + 1).trim();
+        const attrs = {};
+        const attrRegex = /([a-z0-9\-]+)="([^"]*)"/gi;
+        let match;
+        while ((match = attrRegex.exec(meta))) attrs[match[1]] = match[2];
+        entries.push({
+          name,
+          url,
+          logo: attrs['tvg-logo'] || '',
+          group: attrs['group-title'] || '',
+          tvgId: attrs['tvg-id'] || '',
+          country: attrs['tvg-country'] || '',
+          raw: meta
+        });
+      }
+      return entries.filter(entry => entry.url.startsWith('http'));
+    }
+
+    function applyFilter(term) {
+      const q = term.trim().toLowerCase();
+      state.filtered = !q
+        ? state.channels
+        : state.channels.filter(({ name, group, tvgId }) =>
+            [name, group, tvgId].some(field =>
+              (field || '').toLowerCase().includes(q)
+            )
+          );
+      renderList(state.filtered);
+    }
+
+    function renderList(channels) {
+      listEl.innerHTML = '';
+      if (!channels.length) {
+        listEl.innerHTML = '<li style="color:#9ba3c4;">No channels match your search.</li>';
+        return;
+      }
+      const fragment = document.createDocumentFragment();
+      channels.forEach(channel => {
+        const item = document.createElement('li');
+        item.className = 'channel';
+        item.innerHTML = `
+          <div class="logo" style="${channel.logo ? `background-image:url('${channel.logo}')` : 'background-color:#0b0f18;'}"></div>
+          <div class="meta">
+            <strong>${channel.name}</strong>
+            <small>${channel.group || 'Ungrouped'} ${channel.tvgId ? '· ' + channel.tvgId : ''}</small>
+          </div>`;
+        item.addEventListener('click', () => selectChannel(channel, item));
+        fragment.appendChild(item);
+      });
+      listEl.appendChild(fragment);
+    }
+
+    function selectChannel(channel, element) {
+      document.querySelectorAll('li.channel.selected').forEach(li => li.classList.remove('selected'));
+      element.classList.add('selected');
+      state.selected = channel;
+      playStream(channel.url);
+      infoEl.innerHTML = `
+        <strong>Channel:</strong> ${channel.name}<br>
+        <strong>Group:</strong> ${channel.group || '–'}<br>
+        <strong>ID:</strong> ${channel.tvgId || '–'}<br>
+        <strong>Country:</strong> ${channel.country || '–'}
+      `;
+    }
+
+    function playStream(url) {
+      stopStream();
+      if (window.Hls && Hls.isSupported()) {
+        const hls = new Hls({ enableWorker: true });
+        state.hls = hls;
+        hls.loadSource(url);
+        hls.attachMedia(player);
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          if (data.fatal) {
+            hls.destroy();
+            state.hls = null;
+            infoEl.insertAdjacentHTML('beforeend', '<br><strong>Status:</strong> Stream not available.');
+          }
+        });
+      } else if (player.canPlayType('application/vnd.apple.mpegurl')) {
+        player.src = url;
+        player.play().catch(() => {});
+      } else {
+        infoEl.insertAdjacentHTML('beforeend', '<br><strong>Status:</strong> This browser cannot play HLS streams.');
+      }
+    }
+
+    function stopStream() {
+      if (state.hls) {
+        state.hls.destroy();
+        state.hls = null;
+      }
+      player.removeAttribute('src');
+      player.load();
+    }
+  </script>
+</body>
+</html>
